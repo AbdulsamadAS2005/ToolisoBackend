@@ -151,7 +151,7 @@ app.post('/addUser', async (req, res) => {
                     id: newUser._id,
                     name: newUser.name,
                     email: newUser.email,
-                    hasPurchased:newUser.hasPurchased
+                    hasPurchased: newUser.hasPurchased
                 },
             });
         }
@@ -168,9 +168,9 @@ app.post('/loginUser', async (req, res) => {
 
         // Basic input validation
         if (!email || !password) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "Email and password are required" 
+            return res.status(400).json({
+                success: false,
+                message: "Email and password are required"
             });
         }
 
@@ -178,8 +178,8 @@ app.post('/loginUser', async (req, res) => {
 
         if (!user) {
             return res.status(200).json({  // Keeping your 200 status for false
-                success: false, 
-                message: "User not found" 
+                success: false,
+                message: "User not found"
             });
         }
 
@@ -206,31 +206,31 @@ app.post('/loginUser', async (req, res) => {
                 id: user._id,
                 email: user.email,
                 name: user.name,
-                hasPurchased:user.hasPurchased
+                hasPurchased: user.hasPurchased
             }
         });
 
     } catch (error) {
         console.error("Login error:", error);
-        return res.status(400).json({ 
-            success: false, 
-            message: "Login failed" 
+        return res.status(400).json({
+            success: false,
+            message: "Login failed"
         });
     }
 });
 
 
-app.get('/allusers',async(req,res)=>{
+app.get('/allusers', async (req, res) => {
 
-   try {
+    try {
         // Find all users but exclude the password field
         const users = await User.find().select('-password');
-        
+
         res.status(200).json({
             success: true,
             users: users
         });
-        
+
     } catch (error) {
         console.error("Error fetching users:", error);
         res.status(500).json({
@@ -241,7 +241,7 @@ app.get('/allusers',async(req,res)=>{
     }
 })
 
-app.post('/setNewPassword',async(req,res)=>{
+app.post('/setNewPassword', async (req, res) => {
     try {
         const { email, password } = req.body;
 
@@ -266,86 +266,60 @@ app.post('/setNewPassword',async(req,res)=>{
     }
 })
 
-app.post('/getSingleUser', async (req, res) => {
-    const {id}=req.body;
-   const users = await User.findById(id);
-        try{
-        res.status(200).json({
-            success: true,
-            users: users
-        });
-        
-    } catch (error) {
-        console.error("Error fetching users:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch user",
-            error: error.message
-        });
-       
-}});
+const FormData = require('form-data'); // Make sure to install this package
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
-let Stripe=require('stripe');
-
-const getCheckoutSession = async (req, res) => {
+app.post('/imageGenerator', async (req, res) => {
     try {
-        let { user } = req.body;
-        let { price } = req.body;
+        // For FormData, we need to handle multipart/form-data
+        const form = new FormData();
+        form.append('prompt', req.body.prompt);
 
-        
-        
-        const stripe = new Stripe(process.env.Secret_stripe_Key);
-        
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            mode: 'payment',
-            success_url: `${req.protocol}://${req.get('host')}/success`, // Full success URL
-            cancel_url: `${req.protocol}://${req.get('host')}/cancel`, // Full cancel URL
-            customer_email: user.email,
-            client_reference_id: user._id,
-            line_items: [
-                {
-                    price_data: {
-                        currency: 'usd',
-                        unit_amount: price * 100, // Stripe expects amount in cents
-                        product_data: {
-                            name: user.name,
-                            description: "payment for tooliso",
-                        }
-                    },
-                    quantity: 1
-                }
-            ]
+        const clipdropResponse = await fetch('https://clipdrop-api.co/text-to-image/v1', {
+            method: 'POST',
+            headers: {
+                'x-api-key': '361aa7a6ea06a20328b34a633e76823ff840ba382aa1dea48b8b0b66413f857974877035ef63de37f9c738617cf36272',
+                ...form.getHeaders()
+            },
+            body: form
         });
 
-         const transporter = nodemailer.createTransport({
-        service: 'Gmail',
-        auth: {
-            user: 'tooliso100@gmail.com',
-            pass: 'vlrlildnmktclpyz', // Use an app password, not your main password
-        },
-    });
+        if (!clipdropResponse.ok) {
+            const error = await clipdropResponse.text();
+            throw new Error(`ClipDrop API error: ${error}`);
+        }
 
-    const mailOptions = {
-        from: 'tooliso100@gmail.com',
-        to: user.email,
-        subject: 'Tooliso - Payment successfully recieved',
-        text: `Payment Successful
-Total Amount Paid: $${price + 0.10}
-Thank you for your purchase!
-
-If you have any questions or need assistance, please feel free to contact our support team.`
-    };
-    await transporter.sendMail(mailOptions);
+        const imageBuffer = await clipdropResponse.buffer();
+        const base64Img = imageBuffer.toString('base64');
+        const resultImg = `data:image/png;base64,${base64Img}`;
         
-        res.status(200).json({ success: true, message: "Successfully Paid", session});
-    } catch (error) {
-        res.status(500).json({ success: false, message: `Error in checkout ${error}` });
+        res.status(200).send(resultImg);
+    } catch (err) {
+        console.error("Error:", err);
+        res.status(500).json({ 
+            error: "Image generation failed",
+            details: err.message
+        });
     }
-};
+});
 
 
-app.post('/checkout',getCheckoutSession);
 
 app.listen(4000);
 module.exports = app;
+
+// try {
+//         let { grammerPrompt } = req.body;
+//         let response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyAAPa9EnCi5K7_xSEfqPMxogUqlyuy9ns4', {
+//             method: "POST",
+//             headers: { "Content-Type": "application/json" },
+//             body: JSON.stringify({
+//                 contents: [{ parts: [{ text: grammerPrompt }] }]
+//             })
+//         })
+//         const data = await response.json();
+
+//         res.status(200).send(data);
+//     } catch (error) {
+//         res.status(500).send({ error: 'Failed to process grammar fixing.' });
+//     }
