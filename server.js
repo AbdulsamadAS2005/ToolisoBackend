@@ -12,7 +12,7 @@ let db = require('./connection');
 db();
 const mongoose = require('mongoose');
 app.get('/', async (req, res) => {
-    res.send(`this is tooliso...`);
+    res.send(`this is tooliso Backend...`);
 })
 
 app.post('/gemini', async (req, res) => {
